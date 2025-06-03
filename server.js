@@ -6,7 +6,9 @@ require('dotenv').config();
 
 const ssh = new NodeSSH();
 const app = express();
-app.use(cors());
+
+// ✅ CORS correctamente configurado
+app.use(cors({ origin: "*" }));
 
 const {
   SSH_HOST,
@@ -15,8 +17,6 @@ const {
 } = process.env;
 
 app.get('/medir-fibra', async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-
   const { slot, port } = req.query;
   const comando = `onu status ${slot}-${port}`;
 
@@ -41,5 +41,5 @@ app.get('/medir-fibra', async (req, res) => {
 });
 
 app.listen(3000, () => {
-  console.log('Servidor SSH para medir fibra activo en puerto 3000');
+  console.log('Servidor SSH para medir fibra activo en puerto 3000 con CORS habilitado');
 });
