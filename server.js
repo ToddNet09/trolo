@@ -25,12 +25,30 @@ app.get('/medir-fibra', async (req, res) => {
       }
     );
 
-    res.json({ ok: true, data: response.data });
+    const texto = response.data;
+    const lineas = texto.split("\n");
+
+    const datos = [];
+    for (let i = 0; i < lineas.length; i++) {
+      const line = lineas[i].trim();
+      if (/^\d+\s+1-1-1-\d+/.test(line)) {
+        const partes = line.split(/\s+/);
+        datos.push({
+          onu_id: partes[0],
+          onu: partes[1],
+          status: partes[2],
+          config: partes[3],
+          rx: partes[6] // OLT Rx Power
+        });
+      }
+    }
+
+    res.json({ ok: true, data: datos });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
 });
 
 app.listen(3000, () => {
-  console.log('Servidor escuchando en http://localhost:3000');
+  console.log('Servidor Radius activo en puerto 3000');
 });
