@@ -29,9 +29,11 @@ app.get('/medir-fibra', async (req, res) => {
     const lineas = texto.split('\n');
 
     const datos = [];
+    const procesadas = [];
 
     for (let linea of lineas) {
-      linea = linea.replace(/[\x00-\x1F\x7F]+/g, '').trim(); // eliminar caracteres invisibles
+      const original = linea;
+      linea = linea.replace(/[\x00-\x1F\x7F]+/g, '').trim();
       if (/^\d+\s+1-1-1-\d+/.test(linea)) {
         const partes = linea.split(/\s+/);
         datos.push({
@@ -41,15 +43,23 @@ app.get('/medir-fibra', async (req, res) => {
           config: partes[3],
           rx: partes[6] || "N/A"
         });
+        procesadas.push(linea);
       }
     }
 
-    res.json({ ok: true, data: datos });
+    res.json({
+      ok: true,
+      data: datos,
+      debug: {
+        texto_crudo: texto.substring(0, 1000), // muestra los primeros 1000 caracteres
+        lineas_parseadas: procesadas
+      }
+    });
   } catch (error) {
     res.status(500).json({ ok: false, error: error.message });
   }
 });
 
 app.listen(3000, () => {
-  console.log('Servidor Radius corriendo con parser mejorado');
+  console.log('Servidor Radius en modo DEBUG activo en puerto 3000');
 });
