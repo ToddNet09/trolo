@@ -1,44 +1,73 @@
+
 const express = require('express');
-const cors = require('cors');
 const puppeteer = require('puppeteer-core');
+const chromium = require('chrome-aws-lambda');
+const bodyParser = require('body-parser');
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+
 const PORT = process.env.PORT || 10000;
 
-app.use(cors()); // Permitir CORS
-app.use(express.json());
-
-const getSessionId = () => process.env.SESSION_ID_RADIUS;
-
-app.get('/medir-fibra', async (req, res) => {
-  const fibra = req.query.fibra;
-  if (!fibra) return res.status(400).json({ error: "Falta número de fibra" });
-
-  const slotPort = {
-    '6': { slot: 2, port: 14 },
-    '9': { slot: 1, port: 1 }
-  };
-
-  const params = slotPort[fibra];
-  if (!params) return res.status(404).json({ error: "Fibra no encontrada" });
+app.post('/medir-fibra', async (req, res) => {
+  const { slot, port } = req.body;
+  const url = process.env.RADIUS_URL;
+  const user = process.env.RADIUS_USER;
+  const pass = process.env.RADIUS_PASS;
 
   try {
-    const response = await fetch("https://radius-gestion.todd.com.ar/radius/olt/command", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Cookie": "session_id_radius=" + getSessionId()
-      },
-      body: `command=onu status ${params.slot}/${params.port}`
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath,
+      headless: chromium.headless,
     });
-    const html = await response.text();
-    res.json({ output: html });
+
+    const page = await browser.newPage();
+    await page.goto(url.replace("/olt/command", "/login"), { waitUntil: 'networkidle2' });
+
+    await page.type('input[name="email"]', user);
+    await page.type('input[name="password"]', pass);
+    await Promise.all([
+      page.click('button[type="submit"]'),
+      page.waitForNavigation({ waitUntil: 'networkidle2' })
+    ]);
+
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    await page.select('select[name="olt"]', 'Arrecifes');
+    await page.type('input[name="slot"]', slot.toString());
+    await page.type('input[name="port"]', port.toString());
+    await page.select('select[name="command"]', 'onu status');
+
+    await Promise.all([
+      page.click('button[type="submit"]'),
+      page.waitForSelector('table.table')
+    ]);
+
+    const result = await page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('table.table tbody tr'));
+      return rows.map(row => {
+        const cells = row.querySelectorAll('td');
+        return {
+          onu: cells[0]?.innerText.trim(),
+          operStatus: cells[1]?.innerText.trim(),
+          rxPowerOlt: cells[2]?.innerText.trim(),
+          rxPowerOnt: cells[3]?.innerText.trim(),
+          distance: cells[4]?.innerText.trim()
+        };
+      });
+    });
+
+    await browser.close();
+    res.json({ data: result });
   } catch (error) {
-    res.status(500).json({ error: "Fallo al obtener datos" });
+    console.error("Error al medir fibra:", error);
+    res.status(500).json({ error: "Fallo al medir fibra" });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`ToddNet backend con puppeteer-core activo en puerto ${PORT}`);
+  console.log(`✅ ToddNet backend con puppeteer-core activo en puerto ${PORT}`);
 });
