@@ -15,6 +15,8 @@ const {
 } = process.env;
 
 app.get('/medir-fibra', async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+
   const { slot, port } = req.query;
   const comando = `onu status ${slot}-${port}`;
 
